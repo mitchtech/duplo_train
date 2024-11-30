@@ -2,98 +2,90 @@
 #include <Lpf2HubConst.h> //legoino
 #include <Bounce2.h>      //bounce2
 
+#define MAX_THROTTLE 2900  // set to maximum pot value
+#define MIN_THROTTLE 1100  // set to minimum pot value
+#define MAX_SPEED 64
+#define MIN_SPEED -64
+
+#define BTN_MUSIC 25
+#define BTN_LIGHT 26
+#define BTN_WATER 27
+#define BTN_STOP 14
+#define POT_SPEED 15
+
 Lpf2Hub myHub;
 byte port = (byte)PoweredUpHubPort::A;
 
-//Pin declaration
-#define BTN_MUSIC 25
-#define BTN_LICHT 26
-#define BTN_WASSER 27
-#define BTN_STOP 14
-#define PTI_SPEED 15
+Bounce btnMusic = Bounce();
+Bounce btnLight = Bounce();
+Bounce btnWater = Bounce();
+Bounce btnStop = Bounce();
 
-Bounce pbMusic = Bounce();
-Bounce pbLight = Bounce();
-Bounce pbWater = Bounce();
-Bounce pbStop = Bounce();
-int gLastStatePtiSpeed = 0;
+static int throttle = 0;
+static int speed = 0;
+static short color = NONE;
 
-static int gLightOn = 0;
-static short gColor = NONE;
-static int gSpeed =0;
-
-void handlePoti()
+void pollThrottle()
 {
-  int ptiSpeed = analogRead(PTI_SPEED);
-  gLastStatePtiSpeed = ptiSpeed;
-  //Serial.println(ptiSpeed);
-  int speed = 0;
-  if ( ptiSpeed > 1100) speed = 64;     //Fast foreward
-  else if (ptiSpeed > 800) speed = 32;  //normal forweard
-  else if (ptiSpeed > 600) speed = 16;  //slow forefard (might not work on low battery) 
-  else if (ptiSpeed > 400) speed = 0;   //stop
-  else if (ptiSpeed > 200) speed = -32; //slow backward
-  else speed = -64;                     //fast foreward
+  throttle = analogRead(POT_SPEED);
+  int _speed = map(throttle, MIN_THROTTLE, MAX_THROTTLE, MIN_SPEED, MAX_SPEED);
 
-  if(speed != gSpeed)
+  Serial.print("Throttle: ");
+  Serial.print(throttle);
+  Serial.print(" Speed: ");
+  Serial.println(_speed);
+
+  if(_speed != speed)
   { 
-    if(gSpeed == 0 && speed > 0)
+    if(speed == 0 && _speed > 0)
     {
         myHub.playSound((byte)DuploTrainBaseSound::STATION_DEPARTURE);
         delay(100);
     }
-    gSpeed =speed;
+    speed = _speed;
     myHub.setBasicMotorSpeed(port, speed);
   }
 }
 
-
-Color getNextColor()
+Color nextColor()
 {
-    if(gColor == 255)
-    { 
-        gColor = 0;
-        return (Color)0;
+    if(color == 255 || color >= NUM_COLORS - 1) {
+        color = 0;
+    } else {
+        color++;
     }
-       
-    gColor++;
-    
-    if(gColor == NUM_COLORS)
-    {   
-        gColor =255;
-    }
-    return (Color) gColor;
+    return (Color)color;
 } 
 
-void handleButtons()
+void pollButtons()
 {
-  if(pbMusic.update())
+  if(btnMusic.update())
   {
-    if(pbMusic.fell())
+    if(btnMusic.fell())
     {
       myHub.playSound((byte)DuploTrainBaseSound::HORN);
       delay(100);
     }
   }
-  if(pbLight.update())
+  if(btnLight.update())
   {
-    if(pbLight.fell())
+    if(btnLight.fell())
     {
-      myHub.setLedColor(getNextColor());
+      myHub.setLedColor(nextColor());
       delay(100);
     }
   }
-  if(pbWater.update())
+  if(btnWater.update())
   {
-    if(pbWater.fell())
+    if(btnWater.fell())
     {
       myHub.playSound((byte)DuploTrainBaseSound::WATER_REFILL);
       delay(100);  
     }
   }
-  if(pbStop.update())
+  if(btnStop.update())
   {
-    if(pbStop.fell())
+    if(btnStop.fell())
     {
       myHub.setBasicMotorSpeed(port, 0);
       delay(100);
@@ -105,10 +97,10 @@ void handleButtons()
 void setup() {
   Serial.begin(115200);
   //define Pin Modes
-  pbMusic.attach(BTN_MUSIC, INPUT_PULLUP);
-  pbLight.attach(BTN_LICHT, INPUT_PULLUP);
-  pbWater.attach(BTN_WASSER, INPUT_PULLUP);
-  pbStop.attach(BTN_STOP, INPUT_PULLUP);
+  btnMusic.attach(BTN_MUSIC, INPUT_PULLUP);
+  btnLight.attach(BTN_LIGHT, INPUT_PULLUP);
+  btnWater.attach(BTN_WATER, INPUT_PULLUP);
+  btnStop.attach(BTN_STOP, INPUT_PULLUP);
 
   myHub.init();
 }
@@ -124,8 +116,8 @@ void loop() {
         }
     }
     if (myHub.isConnected()) {
-        handleButtons();
-        handlePoti();
+        pollButtons();
+        pollThrottle();
     } 
     delay(50);
 }
